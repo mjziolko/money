@@ -1,17 +1,23 @@
 const { Client } = require('pg');
 
-class Users {
-    static async createUser(slackId, name) {
-        var res = 'success';
+class UserSQL {
+    static async createUser(slackId, slackTeamId, slackUserName, name) {
+        let userName = slackUserName;
+        if (name) {
+            userName = name;
+        }
+
+        let res = 'success';
         try {
             const client = new Client();
             await client.connect();
 
             const res = await client.query(
-                `INSERT INTO users (slack_id, name)\
+                `INSERT INTO users (slack_id, slack_team_id, name)\
                 VALUES(\
                     '${slackId}',\
-                    '${name}\
+                    '${slackTeamId}',\
+                    '${userName}'\
                 );`);
 
             await client.end();
@@ -25,4 +31,4 @@ class Users {
     }
 }
 
-module.exports = Users;
+module.exports = UserSQL;
