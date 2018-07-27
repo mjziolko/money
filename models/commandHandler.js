@@ -3,7 +3,7 @@ const TransactionSQL = require('../models/transactionSQL');
 
 class CommandHandler {
     constructor(slackRequest) {
-        this.supportedCommands = ['init', 'give'];
+        this.supportedCommands = ['init', 'give', 'status'];
         this.slackRequest = slackRequest;
 
         let rawCommand = slackRequest.text;
@@ -27,6 +27,9 @@ class CommandHandler {
                 break;
             case 'give':
                 await TransactionSQL.createTransaction(this.slackRequest.userId, this.commandParams[0], this.commandParams[1], this.commandParams[2]);
+                break;
+            case 'status':
+                await TransactionSQL.getDebtStatus(this.slackRequest.userId);
                 break;
         }
     }

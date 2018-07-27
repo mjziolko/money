@@ -26,6 +26,26 @@ class UserSQL {
             console.error(error);
         }
     }
+
+    static async getUserNameFromSlackId(slackId) {
+        let name = "";
+        try {
+            const client = new Client();
+            await client.connect();
+
+            let response = await client.query(
+                `SELECT name FROM users
+                WHERE slack_id = '${slackId}'`
+            );
+
+            name = response.rows[0].name;
+        }
+        catch (error) {
+            console.error(error);
+        }
+
+        return name;
+    }
 }
 
 module.exports = UserSQL;

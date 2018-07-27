@@ -1,4 +1,5 @@
 const { Client } = require('pg');
+const UserSQL = require('../models/userSQL');
 
 class TransactionSQL {
     static async createTransaction(sender, receiver, amount, description) {
@@ -9,8 +10,12 @@ class TransactionSQL {
             const client = new Client();
             await client.connect();
 
-            let senderId = await this.getUserIdFromSlackId(client, sender);
-            let receiverId = await this.getUserIdFromSlackId(client, receiver);
+            let senderId = this.normalizeSlackId(sender);
+            let receiverId = this.normalizeSlackId(receiver);
+
+            if (senderId === receiverId) {
+                throw new Error('User cannot give themselves money.');
+            }
 
             if (!description) {
                 description = '';
@@ -35,31 +40,74 @@ class TransactionSQL {
         }
     }
 
-    static async getUserIdFromSlackId(client, slackId) {
-        if (slackId.includes('<@')) {
-            slackId = slackId.substr(2, slackId.length - 3);
-        }
-
-        let result = null;
-
+    static async getDebtStatus(slackUserId) {
+        let debtObject = null;
         try {
-            result = await client.query(
-                `SELECT id FROM users\
-                WHERE slack_id = '${slackId}';`
+            const client = new Client();
+            await client.connect();
+
+            let userId = this.normalizeSlackId(slackUserId);
+
+            let sendResponse = await client.query(
+                `SELECT receiver, amount FROM transactions
+                WHERE sender = '${userId}';`
             );
+
+            let receiveResponse = await client.query(
+                `SELECT sender, amount FROM transactions
+                WHERE receiver = '${userId}';`
+            );
+            
+            await client.end();
+
+            debtObject = this.createDebtObject(sendResponse.rows, receiveResponse.rows);
         }
         catch (error) {
             console.error(error);
-            throw new Error(error.message);
         }
 
-        if (result.rowCount === 0) {
-            throw new Error(`User ${slackId} does not exist`);
+        return debtObject;
+    }
+
+    static async createDebtObject(sendRows, receiveRows) {
+        let debt = {};
+
+        for (const row of sendRows) {
+            let user = await UserSQL.getUserNameFromSlackId(row.receiver);
+            let amount = Number(row.amount.replace('$', ''));
+
+            if (user in debt) {
+                let value = debt[user];
+                debt[user] = value - amount;
+            }
+            else {
+                debt[user] = -amount;
+            }
         }
 
-        let id = result.rows[0].id;
+        for (const row of receiveRows) {
+            let user = await UserSQL.getUserNameFromSlackId(row.sender);
+            let amount = Number(row.amount.replace('$', ''));
 
-        return id;
+            if (user in debt) {
+                let value = debt[user];
+                debt[user] = value + amount;
+            }
+            else {
+                debt[user] = amount;
+            }
+        }
+
+        return debt;
+    }
+
+    static normalizeSlackId(slackId) {
+        let strippedSlackId = slackId;
+        if (slackId.includes('<@')) {
+            strippedSlackId = slackId.substr(2, slackId.length - 3);
+        }
+
+        return strippedSlackId;
     }
 }
 
